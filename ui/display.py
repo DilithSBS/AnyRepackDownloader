@@ -3,6 +3,8 @@ Rich-based Visual Terminal UI
 Renders interactive banners, multi-bar progress layouts, and summary tables.
 """
 
+from typing import Optional
+from datetime import datetime
 from rich.console import Console, Group
 from rich.panel import Panel
 from rich.table import Table
@@ -19,7 +21,13 @@ from core.url_parser import format_bytes
 
 console = Console()
 
-def print_banner(source_name: str, target_dir: str, total_files: int, concurrency: int):
+def print_banner(
+    source_name: str,
+    target_dir: str,
+    total_files: int,
+    concurrency: int,
+    scheduled_time: Optional[datetime] = None
+):
     """Prints the application startup banner."""
     grid = Table.grid(expand=True)
     grid.add_column(justify="left")
@@ -28,10 +36,15 @@ def print_banner(source_name: str, target_dir: str, total_files: int, concurrenc
     grid.add_row(f"[bold cyan]📦 Total Files  :[/] [bold yellow]{total_files}[/]")
     grid.add_row(f"[bold cyan]⚡ Parallel Conns:[/] [bold green]{concurrency} simultaneous downloads[/]")
 
+    if scheduled_time:
+        grid.add_row(f"[bold cyan]⏰ Scheduled For:[/] [bold magenta]{scheduled_time.strftime('%Y-%m-%d %H:%M:%S')}[/]")
+    else:
+        grid.add_row(f"[bold cyan]⏰ Start Time   :[/] [bold green]Immediate[/]")
+
     panel = Panel(
         grid,
-        title="[bold green]🚀 AnyDownloader - Universal Multi-Part Downloader[/]",
-        subtitle="[dim]HTTP Range Resuming • Multi-Threaded • Auto-Integrity Verification[/]",
+        title="[bold green]🚀 AnyRepackDownloader - Universal Multi-Part Downloader[/]",
+        subtitle="[dim]HTTP Range Resuming • Multi-Threaded • Timer Scheduling • Auto-Verification[/]",
         border_style="bright_blue"
     )
     console.print(panel)

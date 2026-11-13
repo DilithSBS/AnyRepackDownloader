@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
-AnyDownloader - Universal Multi-Part Batch Downloader
-Entrypoint script supporting both CLI commands and an Interactive Wizard.
+AnyRepackDownloader - Universal Multi-Part Batch Downloader
+Entrypoint script supporting CLI commands, Scheduling Timers, and an Interactive Wizard.
 """
 
 import sys
 import argparse
+from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Optional
 
 # Add current directory to sys.path so modules resolve cleanly
 CURRENT_DIR = Path(__file__).resolve().parent
@@ -16,6 +18,11 @@ if str(CURRENT_DIR) not in sys.path:
 from config import DEFAULT_DOWNLOAD_DIR, DEFAULT_CONCURRENCY, AUTO_VERIFY
 from core.engine import DownloadEngine
 from core.verifier import verify_directory
+from core.scheduler import (
+    parse_scheduled_time,
+    parse_delay,
+    wait_until_scheduled_time
+)
 from ui.display import print_banner, print_summary, console
 
 def load_links_from_file(file_path: Path) -> list:
@@ -26,7 +33,7 @@ def load_links_from_file(file_path: Path) -> list:
 def interactive_wizard() -> tuple:
     """Interactive wizard to guide the user when no CLI arguments are supplied."""
     console.print("[bold cyan]═══════════════════════════════════════════════════════════════[/]")
-    console.print("[bold green]  🚀 Welcome to AnyDownloader - Setup Wizard[/]")
+    console.print("[bold green]  🚀 Welcome to AnyRepackDownloader - Setup Wizard[/]")
     console.print("[bold cyan]═══════════════════════════════════════════════════════════════[/]\n")
 
     # 1. Discover potential link files
@@ -107,14 +114,44 @@ def interactive_wizard() -> tuple:
     par_input = console.input(f"[bold white]Enter number of parallel downloads (1-16) [Default: {DEFAULT_CONCURRENCY}]: [/]").strip()
     concurrency = int(par_input) if par_input.isdigit() and 1 <= int(par_input) <= 32 else DEFAULT_CONCURRENCY
 
+    # 4. Scheduling Options
+    scheduled_time: Optional[datetime] = None
+    console.print(f"\n[bold yellow]⏰ Schedule Start Time:[/] [dim]Default: Immediate[/]")
+    console.print("  [bold cyan][1][/] Start immediately (Default)")
+    console.print("  [bold cyan][2][/] Start at a specific time (e.g. 02:00, 23:30, 01:30 AM)")
+    console.print("  [bold cyan][3][/] Start after a delay (e.g. 30m, 2h, 1h30m)")
+
+    sched_choice = console.input("\n[bold white]Choose schedule mode [Default: 1]: [/]").strip()
+    if sched_choice == "2":
+        while True:
+            time_input = console.input("👉 Enter target clock time (e.g. [yellow]02:00[/], [yellow]23:30[/], [yellow]01:30 AM[/]): ").strip()
+            try:
+                scheduled_time = parse_scheduled_time(time_input)
+                console.print(f"[bold green]✓ Scheduled for:[/] [bold magenta]{scheduled_time.strftime('%Y-%m-%d %H:%M:%S')}[/]")
+                break
+            except Exception as e:
+                console.print(f"[bold red]Error:[/] {e}. Please try again.")
+    elif sched_choice == "3":
+        while True:
+            delay_input = console.input("👉 Enter delay duration (e.g. [yellow]45m[/], [yellow]2h[/], [yellow]1h30m[/]): ").strip()
+            try:
+                seconds = parse_delay(delay_input)
+                scheduled_time = datetime.now() + timedelta(seconds=seconds)
+                console.print(f"[bold green]✓ Starting in {int(seconds/60)} minutes at:[/] [bold magenta]{scheduled_time.strftime('%Y-%m-%d %H:%M:%S')}[/]")
+                break
+            except Exception as e:
+                console.print(f"[bold red]Error:[/] {e}. Please try again.")
+
     console.print("\n")
-    return urls, source_name, target_dir, concurrency
+    return urls, source_name, target_dir, concurrency, scheduled_time
 
 def main():
-    parser = argparse.ArgumentParser(description="AnyDownloader - Universal Multi-Part Batch Downloader")
+    parser = argparse.ArgumentParser(description="AnyRepackDownloader - Universal Multi-Part Batch Downloader with Timer Scheduler")
     parser.add_argument("-i", "--input", help="Path to links text file", default=None)
     parser.add_argument("-d", "--dir", help="Destination download directory", default=None)
     parser.add_argument("-p", "--parallel", "-c", "--concurrency", help="Number of simultaneous parallel downloads", type=int, default=None)
+    parser.add_argument("--start-at", help="Schedule start at a specific time (e.g. '02:00', '23:30', '11:30 PM', '2026-11-14 02:00')", default=None)
+    parser.add_argument("--delay", help="Schedule start after a delay (e.g. '45m', '2h', '1h30m', '90s')", default=None)
     parser.add_argument("--verify-only", help="Verify completeness of an existing download folder without downloading", action="store_true")
     args = parser.parse_args()
 
@@ -127,6 +164,8 @@ def main():
         return
 
     # Check CLI vs Interactive Wizard
+    scheduled_time: Optional[datetime] = None
+
     if args.input:
         links_file = Path(args.input)
         if not links_file.is_file():
@@ -136,15 +175,37 @@ def main():
         source_name = links_file.name
         target_dir = Path(args.dir or DEFAULT_DOWNLOAD_DIR)
         concurrency = args.parallel or DEFAULT_CONCURRENCY
+
+        # Check CLI scheduling flags
+        if args.start_at:
+            try:
+                scheduled_time = parse_scheduled_time(args.start_at)
+            except Exception as e:
+                console.print(f"[bold red]Error in --start-at:[/] {e}")
+                sys.exit(1)
+        elif args.delay:
+            try:
+                sec = parse_delay(args.delay)
+                scheduled_time = datetime.now() + timedelta(seconds=sec)
+            except Exception as e:
+                console.print(f"[bold red]Error in --delay:[/] {e}")
+                sys.exit(1)
     else:
-        urls, source_name, target_dir, concurrency = interactive_wizard()
+        urls, source_name, target_dir, concurrency, scheduled_time = interactive_wizard()
 
     print_banner(
         source_name=source_name,
         target_dir=str(target_dir),
         total_files=len(urls),
-        concurrency=concurrency
+        concurrency=concurrency,
+        scheduled_time=scheduled_time
     )
+
+    # If scheduled in future, wait with animated dashboard
+    if scheduled_time and scheduled_time > datetime.now():
+        proceed = wait_until_scheduled_time(scheduled_time, console=console)
+        if not proceed:
+            sys.exit(0)
 
     engine = DownloadEngine(
         urls=urls,
@@ -163,4 +224,3 @@ if __name__ == "__main__":
         main()
     except (KeyboardInterrupt, EOFError):
         console.print("\n[yellow]Program closed.[/]")
-

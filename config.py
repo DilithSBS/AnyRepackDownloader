@@ -1,5 +1,5 @@
 """
-AnyDownloader - Configuration
+AnyRepackDownloader - Configuration
 Centralized settings for modular file downloading.
 """
 
@@ -26,3 +26,5 @@ USER_AGENT = (
 REFRESH_RATE = 8               # Progress bar refresh rate per second
 AUTO_VERIFY = True             # Auto-check multi-part archive completeness upon finish
 
+# Scheduler Settings
+DEFAULT_SCHEDULE_FORMAT = "%H:%M"   # Default display format for time
