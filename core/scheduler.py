@@ -217,3 +217,4 @@ def wait_until_scheduled_time(target_time: datetime, console: Optional[Console] 
     except KeyboardInterrupt:
         console.print("\n[bold yellow][!] Scheduled download cancelled by user.[/]")
         return False
+
