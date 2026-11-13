@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "anydownloader"
+version = "1.0.0"
+description = "Universal multi-threaded multi-part archive and batch file downloader with rich visual terminal UI."
+readme = "README.md"
+authors = [
+    { name = "AnyDownloader Contributors" }
+]
+license = { text = "MIT" }
+requires-python = ">=3.8"
+keywords = ["downloader", "multi-part", "rar", "batch", "resuming", "rich", "cli"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "requests>=2.31.0",
+    "rich>=13.7.0"
+]
+
+[project.scripts]
+anydownloader = "main:main"
+
+[project.urls]
+Homepage = "https://github.com/your-username/AnyDownloader"
+Issues = "https://github.com/your-username/AnyDownloader/issues"

@@ -1,0 +1,13 @@
+# AnyDownloader Sample Links File
+# Lines starting with '#' are ignored. Empty lines are ignored.
+#
+# Format 1: Direct link ending with filename
+# https://mirror.example.com/downloads/big_archive.part001.rar
+# https://mirror.example.com/downloads/big_archive.part002.rar
+#
+# Format 2: Direct link with hash fragment (#filename)
+# https://dl.example.com/token123#MyGame.part001.rar
+# https://dl.example.com/token456#MyGame.part002.rar
+#
+# Format 3: Raw CDN URLs (filename resolved automatically from Content-Disposition header)
+# https://dl.example.com/dl/AbCdEf123456
