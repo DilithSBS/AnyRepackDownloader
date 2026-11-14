@@ -12,7 +12,7 @@
 
 <p align="center">
   A high-performance command-line downloader built for multi-part archives (e.g., FitGirl, DODI repacks), ISOs, and bulk files.<br>
-  Features <b>live multi-slot progress bars</b>, <b>HTTP Range byte-level resuming</b>, <b>timer scheduling (off-peak hours)</b>, and <b>archive completeness verification</b>.
+  Features <b>live multi-slot progress bars</b>, <b>HTTP Range byte-level resuming</b>, <b>timer scheduling (off-peak hours)</b>, <b>browser link extraction for Cloudflare hosts</b>, and <b>archive completeness verification</b>.
 </p>
 
 ```text
@@ -33,11 +33,12 @@
 * [Features](#-features)
 * [Quick Start](#-quick-start)
 * [Installation](#-installation)
+* [Resolving Protected Links (Link Extractor)](#-resolving-protected-links-link-extractor)
 * [Usage Modes](#-usage-modes)
   * [1. Interactive Wizard](#1-interactive-wizard-easiest)
   * [2. Command-Line Interface (CLI)](#2-command-line-interface-cli)
   * [3. Scheduled Downloads (Timer / Off-Peak)](#3-scheduled-downloads-timer--off-peak)
-  * [4. Paste URLs Directly](#4-paste-urls-directly)
+  * [4. Generate Browser Extractor Script](#4-generate-browser-extractor-script)
   * [5. Archive Verification Only](#5-archive-verification-only)
 * [End-to-End Workflow (FitGirl / Repacks)](#-end-to-end-workflow-fitgirl--repacks)
 * [Repository Structure](#-repository-structure)
@@ -51,6 +52,7 @@
 ## ✨ Features
 
 * **Universal Multi-Part Support**: Handles any number of parts (from 1 file to hundreds of `.rar`, `.zip`, `.7z`, or `.001` slices).
+* **🔗 Integrated Link Extractor**: Resolves Cloudflare-protected landing page links (e.g. `fuckingfast.co/<id>`) into direct CDN download links (`dl.fuckingfast.co`).
 * **⏰ Timer & Start Scheduler**: Schedule downloads to start automatically at a specific clock time (e.g., `02:00` AM, `23:30`) or after a duration (e.g., `2h`, `45m`) for off-peak unlimited internet quotas.
 * **Standby Mode with Live Countdown**: Displays real-time countdown clock, animated timer progress bar, and lets you press <kbd>Enter</kbd> to skip the wait immediately.
 * **Rich Multi-Bar Terminal UI**: Powered by `rich` with zero screen flickering:
@@ -105,6 +107,38 @@ anydownloader --help
 
 ---
 
+## 🔗 Resolving Protected Links (Link Extractor)
+
+File hosts like **FuckingFast** and **Datanodes** protect their landing pages (`https://fuckingfast.co/<id>`) with **Cloudflare Turnstile** anti-bot challenges. If you try to download directly from these URLs in Python/curl, you receive an `HTTP 403 Forbidden` error.
+
+To download them, they must first be resolved into **direct CDN URLs** (`https://dl.fuckingfast.co/...`). AnyRepackDownloader provides **3 convenient ways** to do this:
+
+### 1. Automatic Detection & Prompt (Easiest)
+If you provide landing page URLs to `main.py`, AnyRepackDownloader automatically detects them and asks:
+```text
+⚠ Landing Page Links Detected!
+Would you like AnyRepackDownloader to generate 'extract_links.js' for you?
+  [1] Auto-generate browser extractor script (extract_links.js) [Recommended]
+  [2] Continue anyway
+```
+Selecting `[1]` instantly writes `extract_links.js`. You then paste it once in your browser console, it downloads `direct_links.txt`, and AnyRepackDownloader immediately continues downloading!
+
+### 2. Generate Extractor via CLI
+If you have a file with share links (e.g., `game_links.txt`):
+```bash
+python main.py --make-extractor "game_links.txt"
+```
+This generates `extract_links.js` pre-loaded with all your URLs.
+
+### 3. Universal Browser Extractor (`extractors/browser_extractor.js`)
+If you want to extract links directly while browsing:
+1. Open [extractors/browser_extractor.js](extractors/browser_extractor.js) and copy all code.
+2. Go to `https://fuckingfast.co` in your browser.
+3. Open DevTools (<kbd>F12</kbd> -> **Console**), paste the script, and press <kbd>Enter</kbd>.
+4. A floating dark-themed panel appears where you can paste any links, click **Extract Direct Links**, and it will download `direct_links.txt`!
+
+---
+
 ## 💻 Usage Modes
 
 ### 1. Interactive Wizard (Easiest)
@@ -128,13 +162,13 @@ For headless setups, servers, or batch automation:
 
 ```bash
 # Standard batch download
-python main.py -i "links.txt" -d "D:\Games\MyGame\Downloads" -p 4
+python main.py -i "direct_links.txt" -d "D:\Games\MyGame\Downloads" -p 4
 
 # High-speed connection (6 threads)
-python main.py -i "links.txt" -d "./downloads" -p 6
+python main.py -i "direct_links.txt" -d "./downloads" -p 6
 
 # Conservative mode (2 threads) for unstable connections
-python main.py -i "links.txt" -d "./downloads" -p 2
+python main.py -i "direct_links.txt" -d "./downloads" -p 2
 ```
 
 #### CLI Flags:
@@ -145,6 +179,7 @@ python main.py -i "links.txt" -d "./downloads" -p 2
 | `-p` | `-c`, `--parallel` | Number of simultaneous downloads | `4` |
 | `--start-at` | | Schedule start time (`"02:00"`, `"23:30"`, `"11:45 PM"`) | `None` (Immediate) |
 | `--delay` | | Schedule start after delay (`"45m"`, `"2h"`, `"1h30m"`) | `None` (Immediate) |
+| `--make-extractor` | | Generates `extract_links.js` from links file | `None` |
 | `--verify-only` | | Audits an existing folder without downloading | `False` |
 
 ---
@@ -156,25 +191,25 @@ Take advantage of off-peak or free nighttime internet bandwidth by scheduling yo
 #### Start at a Specific Clock Time:
 ```bash
 # Schedule to start at 2:00 AM tonight (or next occurrence)
-python main.py -i "links.txt" -d "./downloads" --start-at "02:00"
+python main.py -i "direct_links.txt" -d "./downloads" --start-at "02:00"
 
 # Schedule with 12-hour AM/PM format
-python main.py -i "links.txt" --start-at "11:30 PM"
+python main.py -i "direct_links.txt" --start-at "11:30 PM"
 
 # Schedule for a specific date and time
-python main.py -i "links.txt" --start-at "2026-11-14 02:30"
+python main.py -i "direct_links.txt" --start-at "2026-11-14 02:30"
 ```
 
 #### Start After a Relative Delay:
 ```bash
 # Start in 2 hours
-python main.py -i "links.txt" --delay "2h"
+python main.py -i "direct_links.txt" --delay "2h"
 
 # Start in 1 hour and 30 minutes
-python main.py -i "links.txt" --delay "1h30m"
+python main.py -i "direct_links.txt" --delay "1h30m"
 
 # Start in 45 minutes with 4 threads
-python main.py -i "links.txt" --delay "45m" -p 4
+python main.py -i "direct_links.txt" --delay "45m" -p 4
 ```
 
 #### Standby Mode & Controls:
@@ -198,10 +233,13 @@ When scheduled, AnyRepackDownloader displays an animated dashboard:
 
 ---
 
-### 4. Paste URLs Directly
-1. Run `python main.py`.
-2. Choose `P` when prompted for links.
-3. Paste your links into the terminal and press <kbd>Enter</kbd> on a blank line (or type `done`).
+### 4. Generate Browser Extractor Script
+
+To convert a text file of host links into an executable browser script:
+```bash
+python main.py --make-extractor "my_game_links.txt"
+```
+Outputs `extract_links.js` ready to copy into Chrome/Edge/Firefox DevTools.
 
 ---
 
@@ -222,8 +260,13 @@ Output Report:
 
 ## 🎮 End-to-End Workflow (FitGirl / Repacks)
 
-1. **Extract Direct Links**:
-   If downloading from Cloudflare-protected hosts (like `fuckingfast.co`), open the first link in your browser, press <kbd>F12</kbd> -> Console, and run the link extractor snippet to save `direct_links.txt`.
+1. **Get Direct Links**:
+   * If you have share links (e.g. `fuckingfast.co/xyz#part001.rar`), run:
+     ```bash
+     python main.py --make-extractor "links.txt"
+     ```
+   * Open the first link in your browser, open DevTools (<kbd>F12</kbd> -> **Console**), paste `extract_links.js`, and hit <kbd>Enter</kbd>.
+   * It will automatically download `direct_links.txt`.
 2. **Run Downloader with Timer**:
    ```bash
    python main.py -i "direct_links.txt" -d "E:\Games\Downloads" --start-at "02:00" -p 4
@@ -245,8 +288,12 @@ AnyRepackDownloader/
 │   ├── __init__.py
 │   ├── engine.py                  # Thread-pool manager, HTTP Range resume logic
 │   ├── scheduler.py               # Time parser, delay calculator, countdown dashboard
-│   ├── url_parser.py              # Header parser, filename sanitizer, part extractor
+│   ├── url_parser.py              # Header parser, filename sanitizer, part extractor, landing detector
 │   └── verifier.py                # Archive auditor & missing part detector
+├── extractors/
+│   ├── __init__.py
+│   ├── browser_extractor.js       # Universal browser console script with floating UI
+│   └── generator.py               # CLI generator creating customized extract_links.js
 ├── ui/
 │   ├── __init__.py
 │   └── display.py                 # Rich progress panels, speedometers, tables

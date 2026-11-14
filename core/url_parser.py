@@ -111,3 +111,41 @@ def format_bytes(bytes_num: float) -> str:
         bytes_num /= 1024.0
     return f"{bytes_num:.1f} PB"
 
+def is_landing_page_url(url: str) -> bool:
+    """
+    Checks if a URL is a known file host landing page protected by Cloudflare/captchas
+    rather than a direct CDN download link.
+    """
+    try:
+        parsed = urllib.parse.urlparse(url)
+        host = parsed.netloc.lower()
+        path = parsed.path.lower()
+
+        # FuckingFast (landing: fuckingfast.co/<id>, direct: dl.fuckingfast.co/dl/...)
+        if "fuckingfast.co" in host:
+            if not host.startswith("dl.") and not path.startswith("/dl/"):
+                return True
+
+        # Datanodes (landing: datanodes.to/<id>, direct has /dl/ or /direct/)
+        if "datanodes.to" in host:
+            if not path.startswith("/dl/") and "/direct/" not in path:
+                return True
+
+        # Pixeldrain (landing: pixeldrain.com/u/<id>, direct: /api/file/<id>)
+        if "pixeldrain.com" in host and "/u/" in path:
+            return True
+
+        # Gofile (landing: gofile.io/d/<id>)
+        if "gofile.io" in host and "/d/" in path:
+            return True
+
+    except Exception:
+        pass
+
+    return False
+
+def detect_landing_page_urls(urls: list) -> list:
+    """Filters and returns all URLs in the list that are landing page URLs."""
+    return [u for u in urls if is_landing_page_url(u)]
+
+

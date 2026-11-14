@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """
 AnyRepackDownloader - Universal Multi-Part Batch Downloader
-Entrypoint script supporting CLI commands, Scheduling Timers, and an Interactive Wizard.
+Entrypoint script supporting CLI commands, Scheduling Timers, Interactive Wizard,
+and automatic Browser Link Extractor generation.
 """
 
 import sys
 import argparse
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List, Tuple
 
 # Add current directory to sys.path so modules resolve cleanly
 CURRENT_DIR = Path(__file__).resolve().parent
@@ -18,17 +19,80 @@ if str(CURRENT_DIR) not in sys.path:
 from config import DEFAULT_DOWNLOAD_DIR, DEFAULT_CONCURRENCY, AUTO_VERIFY
 from core.engine import DownloadEngine
 from core.verifier import verify_directory
+from core.url_parser import detect_landing_page_urls
 from core.scheduler import (
     parse_scheduled_time,
     parse_delay,
     wait_until_scheduled_time
 )
+from extractors.generator import generate_extractor_script
 from ui.display import print_banner, print_summary, console
 
 def load_links_from_file(file_path: Path) -> list:
     """Reads non-empty, non-comment lines from a file."""
     with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
         return [line.strip() for line in f if line.strip() and not line.startswith("#")]
+
+def find_extracted_links_file() -> Optional[Path]:
+    """Looks for newly downloaded or existing direct_links.txt files."""
+    candidates = [
+        CURRENT_DIR / "direct_links.txt",
+        DEFAULT_DOWNLOAD_DIR / "direct_links.txt",
+        Path.home() / "Downloads" / "direct_links.txt",
+        Path.home() / "Downloads" / "Out_Direct_Links.txt"
+    ]
+    for c in candidates:
+        if c.is_file() and c.stat().st_size > 0:
+            return c
+    return None
+
+def check_and_handle_landing_pages(urls: List[str]) -> Tuple[List[str], str]:
+    """
+    Checks if provided URLs are host landing pages (e.g. fuckingfast.co/<id>)
+    which are blocked by Cloudflare. If so, offers to generate extract_links.js.
+    """
+    landing = detect_landing_page_urls(urls)
+    if not landing:
+        return urls, ""
+
+    console.print(f"\n[bold yellow]⚠ Landing Page Links Detected ({len(landing)} of {len(urls)})[/]")
+    console.print(
+        "[dim]These links (e.g. [white]https://fuckingfast.co/<id>[/]) are web landing pages protected by "
+        "Cloudflare Turnstile anti-bot verification. CLI downloaders receive HTTP 403 unless direct CDN links "
+        "([white]https://dl.fuckingfast.co/...[/]) are used.[/]\n"
+    )
+
+    console.print("[bold cyan]Choose an action:[/]")
+    console.print("  [bold green][1] Auto-generate browser extractor script (extract_links.js)[/] [Recommended]")
+    console.print("  [bold white][2] Continue anyway (if you already have direct tokens or proxy bypass)[/]")
+
+    choice = console.input("\n[bold white]Select option [Default: 1]: [/]").strip()
+    if choice != "2":
+        output_js = CURRENT_DIR / "extract_links.js"
+        generate_extractor_script(urls, output_js)
+
+        first_url = urls[0] if urls else "https://fuckingfast.co"
+        console.print(f"\n[bold green]✓ Generated browser script:[/] [cyan]{output_js}[/]")
+        console.print("[bold white]═══════════════════════════════════════════════════════════════[/]")
+        console.print("[bold cyan]👉 Follow these 3 easy steps in your browser:[/]")
+        console.print(f"1. Open Chrome/Edge/Firefox and visit: [underline cyan]{first_url}[/]")
+        console.print("2. Press [bold yellow]F12[/] (or Right-Click -> Inspect) and click the [bold yellow]Console[/] tab.")
+        console.print(f"3. Copy all code from [yellow]{output_js.name}[/], paste it into Console, and hit [bold yellow]Enter[/].")
+        console.print("   [dim]It will resolve all links and download [white]direct_links.txt[/] automatically.[/]")
+        console.print("[bold white]═══════════════════════════════════════════════════════════════[/]\n")
+
+        console.input("[bold yellow]Press <Enter> here once direct_links.txt has downloaded...[/]")
+
+        # Search for direct_links.txt
+        found = find_extracted_links_file()
+        if found:
+            resolved_urls = load_links_from_file(found)
+            console.print(f"[bold green]✓ Loaded {len(resolved_urls)} direct CDN download links from:[/] {found.name}\n")
+            return resolved_urls, found.name
+        else:
+            console.print("[bold red]Could not find direct_links.txt. Proceeding with original links.[/]")
+
+    return urls, ""
 
 def interactive_wizard() -> tuple:
     """Interactive wizard to guide the user when no CLI arguments are supplied."""
@@ -104,6 +168,11 @@ def interactive_wizard() -> tuple:
         console.print("[bold red]No valid URLs found. Exiting.[/]")
         sys.exit(1)
 
+    # Check for landing pages (FuckingFast / Datanodes) and resolve if needed
+    urls, new_source = check_and_handle_landing_pages(urls)
+    if new_source:
+        source_name = new_source
+
     # 2. Target Directory
     console.print(f"\n[bold yellow]Download Folder:[/] [dim]Default: {DEFAULT_DOWNLOAD_DIR}[/]")
     target_input = console.input("[bold white]Press Enter to use default or type custom folder path: [/]").strip(' "\'')
@@ -152,8 +221,22 @@ def main():
     parser.add_argument("-p", "--parallel", "-c", "--concurrency", help="Number of simultaneous parallel downloads", type=int, default=None)
     parser.add_argument("--start-at", help="Schedule start at a specific time (e.g. '02:00', '23:30', '11:30 PM', '2026-11-14 02:00')", default=None)
     parser.add_argument("--delay", help="Schedule start after a delay (e.g. '45m', '2h', '1h30m', '90s')", default=None)
+    parser.add_argument("--make-extractor", help="Generate an extract_links.js browser script from a links file and exit", default=None)
     parser.add_argument("--verify-only", help="Verify completeness of an existing download folder without downloading", action="store_true")
     args = parser.parse_args()
+
+    # Make Extractor only mode
+    if args.make_extractor:
+        src_file = Path(args.make_extractor)
+        if not src_file.is_file():
+            console.print(f"[bold red]File not found: {args.make_extractor}[/]")
+            sys.exit(1)
+        raw_urls = load_links_from_file(src_file)
+        out_js = CURRENT_DIR / "extract_links.js"
+        generate_extractor_script(raw_urls, out_js)
+        console.print(f"[bold green]✓ Generated browser extractor script:[/] [cyan]{out_js}[/]")
+        console.print(f"Pre-loaded with [yellow]{len(raw_urls)}[/] URLs. Paste into browser DevTools Console to run.")
+        return
 
     # Verify only mode
     if args.verify_only:
@@ -175,6 +258,11 @@ def main():
         source_name = links_file.name
         target_dir = Path(args.dir or DEFAULT_DOWNLOAD_DIR)
         concurrency = args.parallel or DEFAULT_CONCURRENCY
+
+        # Check for landing pages
+        urls, new_source = check_and_handle_landing_pages(urls)
+        if new_source:
+            source_name = new_source
 
         # Check CLI scheduling flags
         if args.start_at:
