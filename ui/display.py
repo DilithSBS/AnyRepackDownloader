@@ -97,37 +97,52 @@ def print_summary(report: dict, elapsed_seconds: float, target_dir: str):
     table.add_column("Property", style="cyan", no_wrap=True)
     table.add_column("Details", style="white")
 
-    table.add_row("Status", "[bold green]Complete (All Parts Verified)[/]" if report['is_complete'] else "[bold red]Incomplete (Missing Parts)[/]")
-    table.add_row("Parts Verified", f"{report['total_found']} / {report['total_expected']}")
+    is_multi = report.get('is_multipart', False)
+    label = "Parts" if is_multi else "Files"
+
+    if report['is_complete']:
+        status_text = f"[bold green]Complete (All {label} Verified)[/]"
+    else:
+        status_text = f"[bold red]Incomplete (Missing {label})[/]"
+
+    table.add_row("Status", status_text)
+    table.add_row(f"{label} Verified", f"{report['total_found']} / {report['total_expected']}")
     table.add_row("Total Size", f"{format_bytes(report['total_size_bytes'])}")
     table.add_row("Time Elapsed", f"{elapsed_seconds / 60:.1f} minutes ({elapsed_seconds:.0f} seconds)")
     
-    if elapsed_seconds > 0:
+    if elapsed_seconds > 0 and report['total_size_bytes'] > 0:
         avg_speed = report['total_size_bytes'] / elapsed_seconds
         table.add_row("Average Speed", f"{format_bytes(avg_speed)}/s")
 
     table.add_row("Destination", f"{target_dir}")
 
     if report['incomplete_files']:
-        table.add_row("Incomplete Files", f"[yellow]{', '.join(report['incomplete_files'])}[/]")
+        table.add_row("Incomplete Files (.part)", f"[yellow]{', '.join(report['incomplete_files'])}[/]")
 
     if report['missing_parts']:
-        table.add_row("Missing Parts", f"[bold red]{report['missing_parts']}[/]")
+        table.add_row(f"Missing {label}", f"[bold red]{', '.join(str(m) for m in report['missing_parts'])}[/]")
 
     console.print()
     console.print(table)
 
     if report['is_complete']:
-        console.print(Panel(
-            "[bold white]All archives are ready for extraction![/]\n"
-            "Right-click [bold yellow]part001.rar[/] (or .001) and choose [bold green]Extract Here[/] using 7-Zip or WinRAR.",
-            border_style="green",
-            title="[bold green]Ready for Extraction[/]"
-        ))
+        if is_multi:
+            console.print(Panel(
+                "[bold white]All archive parts are present and ready for extraction![/]\n"
+                "Right-click [bold yellow]part001.rar[/] (or .001) and choose [bold green]Extract Here[/] using 7-Zip or WinRAR.",
+                border_style="green",
+                title="[bold green]Ready for Extraction[/]"
+            ))
+        else:
+            console.print(Panel(
+                "[bold green]✔ All downloaded files verified intact and ready to use![/]",
+                border_style="green",
+                title="[bold green]Download Successful[/]"
+            ))
     else:
         console.print(Panel(
-            "[bold yellow]Some parts are missing or incomplete.[/]\n"
-            "Simply re-run the program pointing to the same folder to resume the missing parts automatically.",
+            f"[bold yellow]Some {label.lower()} are missing or incomplete.[/]\n"
+            "Simply re-run the program pointing to the same folder to resume the missing files automatically.",
             border_style="yellow",
             title="[bold yellow]Action Required[/]"
         ))

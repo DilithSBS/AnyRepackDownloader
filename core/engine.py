@@ -39,6 +39,7 @@ class DownloadEngine:
         self.completed_counter = {
             'count': 0,
             'failed': [],
+            'downloaded_files': [],
             'lock': threading.Lock()
         }
 
@@ -109,6 +110,7 @@ class DownloadEngine:
                     )
                     with self.completed_counter['lock']:
                         self.completed_counter['count'] += 1
+                        self.completed_counter['downloaded_files'].append(file_path)
                         overall_progress.update(overall_task_id, completed=self.completed_counter['count'])
                     self.work_queue.task_done()
                     time.sleep(0.05)
@@ -194,6 +196,10 @@ class DownloadEngine:
                         if self.shutdown_event.is_set():
                             break
 
+                        # Stream cutoff verification: ensure all bytes were received
+                        if total_size and downloaded < total_size:
+                            raise Exception(f"Incomplete download stream: received {downloaded} of {total_size} bytes")
+
                         # Rename .part to final filename
                         if part_path.exists():
                             if file_path.exists():
@@ -222,6 +228,7 @@ class DownloadEngine:
             if success:
                 with self.completed_counter['lock']:
                     self.completed_counter['count'] += 1
+                    self.completed_counter['downloaded_files'].append(file_path)
                     overall_progress.update(overall_task_id, completed=self.completed_counter['count'])
             else:
                 with self.completed_counter['lock']:
@@ -265,17 +272,25 @@ class DownloadEngine:
             for t in threads:
                 t.join(timeout=2.0)
             console.print("[bold green]Progress saved! You can resume anytime by re-running.[/]")
+            all_expected = list(self.completed_counter['downloaded_files'])
+            for _, failed_name, _ in self.completed_counter['failed']:
+                all_expected.append(self.target_dir / failed_name)
             return {
                 'completed': self.completed_counter['count'],
                 'failed': self.completed_counter['failed'],
+                'downloaded_files': all_expected,
                 'elapsed': time.time() - start_time,
                 'interrupted': True
             }
 
         elapsed = time.time() - start_time
+        all_expected = list(self.completed_counter['downloaded_files'])
+        for _, failed_name, _ in self.completed_counter['failed']:
+            all_expected.append(self.target_dir / failed_name)
         return {
             'completed': self.completed_counter['count'],
             'failed': self.completed_counter['failed'],
+            'downloaded_files': all_expected,
             'elapsed': elapsed,
             'interrupted': False
         }

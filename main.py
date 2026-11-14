@@ -304,7 +304,11 @@ def main():
     result = engine.start()
 
     if not result.get('interrupted', False) and AUTO_VERIFY:
-        report = verify_directory(target_dir, expected_count=len(urls))
+        report = verify_directory(
+            target_dir=target_dir,
+            expected_count=len(urls),
+            expected_files=result.get('downloaded_files')
+        )
         print_summary(report, elapsed_seconds=result['elapsed'], target_dir=str(target_dir))
 
 if __name__ == "__main__":

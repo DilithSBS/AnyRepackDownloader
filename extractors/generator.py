@@ -154,3 +154,4 @@ def generate_extractor_script(urls: List[str], output_path: Path) -> Path:
         f.write(js_template)
 
     return output_path
+

@@ -48,6 +48,9 @@ venv.bak/
 
 # Local User links (exclude actual download links from tracking)
 direct_links.txt
+extract_links.js
+links.txt
+urls.txt
 links.txt
 Out_Direct_Links.txt
 
